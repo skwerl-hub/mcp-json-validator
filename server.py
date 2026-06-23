@@ -409,6 +409,53 @@ async def handle_health(request: Request) -> JSONResponse:
     return JSONResponse({"status": "ok", "server": "self-healing-json-validator"})
 
 
+async def handle_server_card(request: Request) -> JSONResponse:
+    """
+    Smithery server card — allows Smithery to discover and list this server
+    without needing to scan it via SSE first.
+    See: https://smithery.ai/docs/build/publish#troubleshooting
+    """
+    return JSONResponse({
+        "name": "Self-Healing JSON Validator",
+        "description": (
+            "Production-grade JSON repair and validation for agent pipelines. "
+            "Automatically fixes malformed LLM output using Gemini, then validates "
+            "against your JSON Schema. Returns structured error codes for self-healing loops. "
+            "Pricing: $0.01 per successful call. Register at /register with your email to get an API key."
+        ),
+        "version": "1.0.0",
+        "vendor": "DevEngine Labs",
+        "capabilities": {
+            "tools": True
+        },
+        "tools": [
+            {
+                "name": "sanitize_and_validate_json",
+                "description": (
+                    "Repairs malformed JSON and validates it against a JSON Schema. "
+                    "Pass raw_input (the broken JSON string), target_schema (JSON Schema Draft-07), "
+                    "and your api_key. Returns validated data or structured error codes."
+                ),
+                "inputSchema": {
+                    "type": "object",
+                    "required": ["raw_input", "target_schema", "api_key"],
+                    "properties": {
+                        "raw_input": {"type": "string"},
+                        "target_schema": {"type": "object"},
+                        "api_key": {"type": "string"}
+                    }
+                }
+            }
+        ],
+        "registration": {
+            "url": "https://mcp-json-validator-production.up.railway.app/register",
+            "method": "POST",
+            "body": {"email": "<your-email>"},
+            "returns": ["api_key", "checkout_url"]
+        }
+    })
+
+
 async def handle_register(request: Request) -> JSONResponse:
     """
     Fully automated key issuance. Agent POSTs {"email": "..."} and receives
@@ -468,6 +515,7 @@ async def handle_register(request: Request) -> JSONResponse:
 app = Starlette(
     routes=[
         Route("/health", handle_health, methods=["GET"]),
+        Route("/.well-known/mcp/server-card.json", handle_server_card, methods=["GET"]),
         Route("/register", handle_register, methods=["POST"]),
         Route("/sse", handle_sse, methods=["GET"]),
         Mount("/messages/", app=sse_transport.handle_post_message),
