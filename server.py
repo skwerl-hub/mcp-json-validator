@@ -99,7 +99,7 @@ def create_stripe_customer(email: str) -> tuple[str, str]:
         customer=customer.id,
         payment_method_types=["card"],
         mode="subscription",
-        line_items=[{"price": STRIPE_PRICE_ID, "quantity": 1}],
+        line_items=[{"price": STRIPE_PRICE_ID}],
         success_url="https://mcp-json-validator-production.up.railway.app/health",
         cancel_url="https://mcp-json-validator-production.up.railway.app/health",
     )
