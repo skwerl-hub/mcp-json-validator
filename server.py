@@ -419,6 +419,7 @@ async def handle_health(request: Request) -> Response:
 
 app = Starlette(
     routes=[
+        Route("/", handle_health, methods=["GET"]),
         Route("/health", handle_health, methods=["GET"]),
         Route("/sse", handle_sse, methods=["GET"]),
         Mount("/messages/", app=sse_transport.handle_post_message),
