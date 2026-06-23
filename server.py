@@ -1,6 +1,6 @@
 """
 Self-Healing JSON Validator — MCP Server
-Stateless, serverless-ready utility for agent pipelines.
+SSE transport — deployable to Railway / Fly.io.
 """
 
 import json
@@ -13,15 +13,19 @@ from typing import Any
 from google import genai
 from google.genai import types as genai_types
 import jsonschema
-from jsonschema import Draft7Validator, ValidationError
+from jsonschema import Draft7Validator
+import uvicorn
 from mcp.server import Server
-from mcp.server.stdio import stdio_server
+from mcp.server.sse import SseServerTransport
 from mcp.types import (
     CallToolResult,
     TextContent,
     Tool,
 )
-from pydantic import BaseModel
+from starlette.applications import Starlette
+from starlette.requests import Request
+from starlette.responses import Response
+from starlette.routing import Mount, Route
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -44,6 +48,7 @@ VALID_API_KEYS: set[str] = {
 GEMINI_API_KEY: str = os.environ.get("GEMINI_API_KEY", "")
 REPAIR_MODEL: str = "gemini-2.0-flash"  # cost-optimised; swap to gemini-1.5-pro if needed
 MAX_REPAIR_TOKENS: int = 4096
+PORT: int = int(os.environ.get("PORT", "8000"))  # Railway injects PORT automatically
 
 
 # ---------------------------------------------------------------------------
@@ -385,24 +390,52 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> CallToolResult:
 
 
 # ---------------------------------------------------------------------------
-# Entry point
+# SSE Web Application (Starlette)
 # ---------------------------------------------------------------------------
 
-async def main() -> None:
-    logger.info("Starting Self-Healing JSON Validator MCP Server (stdio transport)")
-    logger.info(
-        "Auth mode: %s",
-        f"enforced ({len(VALID_API_KEYS)} key(s))" if VALID_API_KEYS else "disabled (open)",
-    )
-    async with stdio_server() as (read_stream, write_stream):
+sse_transport = SseServerTransport("/messages/")
+
+
+async def handle_sse(request: Request) -> Response:
+    """SSE endpoint — agents connect here to establish an MCP session."""
+    async with sse_transport.connect_sse(
+        request.scope, request.receive, request._send
+    ) as (read_stream, write_stream):
         await server.run(
             read_stream,
             write_stream,
             server.create_initialization_options(),
         )
+    return Response()
 
+
+async def handle_health(request: Request) -> Response:
+    """Simple health check so Railway knows the container is alive."""
+    return Response(
+        content=json.dumps({"status": "ok", "server": "self-healing-json-validator"}),
+        media_type="application/json",
+    )
+
+
+app = Starlette(
+    routes=[
+        Route("/health", handle_health, methods=["GET"]),
+        Route("/sse", handle_sse, methods=["GET"]),
+        Mount("/messages/", app=sse_transport.handle_post_message),
+    ]
+)
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    import asyncio
-
-    asyncio.run(main())
+    logger.info(
+        "Starting Self-Healing JSON Validator MCP Server (SSE transport) on port %d", PORT
+    )
+    logger.info(
+        "Auth mode: %s",
+        f"enforced ({len(VALID_API_KEYS)} key(s))" if VALID_API_KEYS else "disabled (open)",
+    )
+    uvicorn.run(app, host="0.0.0.0", port=PORT)

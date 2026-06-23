@@ -42,16 +42,19 @@ RUN chown -R mcpuser:mcpuser /app
 USER mcpuser
 
 # ── Runtime configuration ─────────────────────────────────────
-# MCP stdio servers communicate over stdin/stdout — no TCP port needed.
+# PORT is injected automatically by Railway.
 # These ENV vars are overridden at deploy time via Railway/Fly secrets.
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
+    PORT=8000 \
     GEMINI_API_KEY="" \
     MCP_API_KEYS=""
 
-# Health check: verify the Python environment is intact
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import mcp, google.genai, jsonschema, pydantic; print('ok')" || exit 1
+EXPOSE 8000
 
-# MCP servers speak JSON-RPC over stdio — invoke directly
+# Health check: hit the /health HTTP endpoint
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+
+# Start the SSE web server
 ENTRYPOINT ["python", "server.py"]
