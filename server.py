@@ -432,8 +432,8 @@ async def handle_register(request: Request) -> JSONResponse:
     try:
         customer_id, checkout_url = create_stripe_customer(email)
     except stripe.StripeError as e:
-        logger.error("Stripe error during registration: %s", e)
-        return JSONResponse({"error": "Payment setup failed. Check your Stripe config."}, status_code=500)
+        logger.error("Stripe error during registration: %s | code: %s | type: %s", e.user_message, e.code, e.error.type if e.error else "unknown")
+        return JSONResponse({"error": "Payment setup failed.", "detail": e.user_message, "code": e.code}, status_code=500)
 
     api_key = f"mcpjv_{secrets.token_urlsafe(32)}"
 
