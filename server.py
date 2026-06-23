@@ -88,29 +88,34 @@ def supabase_select(table: str, filters: dict) -> list[dict]:
 # Billing helpers
 # ---------------------------------------------------------------------------
 
-def create_stripe_metered_subscription(email: str) -> tuple[str, str]:
+def create_stripe_customer(email: str) -> tuple[str, str]:
     """
-    Creates a Stripe customer + metered subscription.
-    Returns (customer_id, subscription_id).
-    Agent-facing: called during /register.
+    Creates a Stripe customer and a checkout session for payment method setup.
+    Returns (customer_id, checkout_url).
+    Agent registers email, then visits checkout_url to add a card before calling the tool.
     """
     customer = stripe.Customer.create(email=email)
-    subscription = stripe.Subscription.create(
+    session = stripe.checkout.Session.create(
         customer=customer.id,
-        items=[{"price": STRIPE_PRICE_ID}],
-        payment_behavior="default_incomplete",
-        expand=["latest_invoice.payment_intent"],
+        payment_method_types=["card"],
+        mode="subscription",
+        line_items=[{"price": STRIPE_PRICE_ID, "quantity": 1}],
+        success_url="https://mcp-json-validator-production.up.railway.app/health",
+        cancel_url="https://mcp-json-validator-production.up.railway.app/health",
     )
-    return customer.id, subscription.id
+    return customer.id, session.url
 
 
-def report_usage_to_stripe(subscription_id: str) -> None:
+def report_usage_to_stripe(customer_id: str) -> None:
     """
     Reports one usage unit to Stripe for metered billing.
-    Called on every successful tool invocation.
+    Looks up the active subscription for the customer and increments usage.
     """
-    subscription = stripe.Subscription.retrieve(subscription_id)
-    subscription_item_id = subscription["items"]["data"][0]["id"]
+    subscriptions = stripe.Subscription.list(customer=customer_id, status="active", limit=1)
+    if not subscriptions.data:
+        logger.warning("No active subscription found for customer %s — skipping", customer_id)
+        return
+    subscription_item_id = subscriptions.data[0]["items"]["data"][0]["id"]
     stripe.SubscriptionItem.create_usage_record(
         subscription_item_id,
         quantity=1,
@@ -118,14 +123,14 @@ def report_usage_to_stripe(subscription_id: str) -> None:
     )
 
 
-def log_and_bill(api_key: str, subscription_id: str) -> None:
+def log_and_bill(api_key: str, customer_id: str) -> None:
     """Logs usage to Supabase and reports to Stripe. Errors are non-fatal."""
     try:
         supabase_insert("usage_log", {"api_key": api_key})
     except Exception as e:
         logger.warning("Supabase usage log failed: %s", e)
     try:
-        report_usage_to_stripe(subscription_id)
+        report_usage_to_stripe(customer_id)
     except Exception as e:
         logger.warning("Stripe usage report failed: %s", e)
 
@@ -136,7 +141,7 @@ def log_and_bill(api_key: str, subscription_id: str) -> None:
 
 def authenticate(api_key: str | None) -> str | None:
     """
-    Returns the stripe_subscription_id if the key is valid, else None.
+    Returns the stripe_customer_id if the key is valid, else None.
     When SUPABASE_URL is not configured, falls back to env-var auth (dev mode).
     """
     if not api_key:
@@ -147,7 +152,7 @@ def authenticate(api_key: str | None) -> str | None:
     try:
         rows = supabase_select("api_keys", {"api_key": api_key})
         if rows:
-            return rows[0]["stripe_subscription_id"]
+            return rows[0]["stripe_customer_id"]
         return None
     except Exception as e:
         logger.error("Auth lookup failed: %s", e)
@@ -366,7 +371,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> CallToolResult:
         )
 
     # ── Bill for successful call ──────────────────────────────────────────
-    log_and_bill(api_key, subscription_id)
+    log_and_bill(api_key, subscription_id)  # subscription_id contains customer_id from authenticate()
 
     return _ok(
         {
@@ -425,7 +430,7 @@ async def handle_register(request: Request) -> JSONResponse:
         return JSONResponse({"error": "A valid email is required."}, status_code=400)
 
     try:
-        customer_id, subscription_id = create_stripe_metered_subscription(email)
+        customer_id, checkout_url = create_stripe_customer(email)
     except stripe.StripeError as e:
         logger.error("Stripe error during registration: %s", e)
         return JSONResponse({"error": "Payment setup failed. Check your Stripe config."}, status_code=500)
@@ -438,7 +443,7 @@ async def handle_register(request: Request) -> JSONResponse:
             {
                 "api_key": api_key,
                 "stripe_customer_id": customer_id,
-                "stripe_subscription_id": subscription_id,
+                "stripe_subscription_id": "pending",
             },
         )
     except Exception as e:
@@ -449,10 +454,10 @@ async def handle_register(request: Request) -> JSONResponse:
     return JSONResponse(
         {
             "api_key": api_key,
+            "checkout_url": checkout_url,
             "message": (
-                "Your API key has been issued. Pass it as the 'api_key' argument "
-                "on every tool call. You will be billed $0.01 per successful call "
-                "via Stripe at the end of each month."
+                "Your API key has been issued. Visit checkout_url to add your payment "
+                "method. You will be billed $0.01 per successful call via Stripe monthly."
             ),
             "billing": "Metered — $0.01 per successful call, billed monthly via Stripe.",
         },
