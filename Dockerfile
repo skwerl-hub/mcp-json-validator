@@ -51,7 +51,7 @@ ENV PYTHONUNBUFFERED=1 \
 
 # Health check: verify the Python environment is intact
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import mcp, google.generativeai, jsonschema, pydantic; print('ok')" || exit 1
+    CMD python -c "import mcp, google.genai, jsonschema, pydantic; print('ok')" || exit 1
 
 # MCP servers speak JSON-RPC over stdio — invoke directly
 ENTRYPOINT ["python", "server.py"]

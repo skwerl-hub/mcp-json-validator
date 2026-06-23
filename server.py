@@ -10,7 +10,8 @@ import re
 import sys
 from typing import Any
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types as genai_types
 import jsonschema
 from jsonschema import Draft7Validator, ValidationError
 from mcp.server import Server
@@ -76,7 +77,7 @@ def repair_json(raw_input: str, target_schema: dict[str, Any]) -> str:
             "Cannot perform LLM-assisted repair without it."
         )
 
-    genai.configure(api_key=GEMINI_API_KEY)
+    client = genai.Client(api_key=GEMINI_API_KEY)
 
     schema_str = json.dumps(target_schema, indent=2)
     prompt = f"""You are a JSON repair specialist. Your task is to fix the malformed or \
@@ -96,14 +97,14 @@ Malformed / broken input:
 
 Repaired JSON:"""
 
-    model = genai.GenerativeModel(
-        model_name=REPAIR_MODEL,
-        generation_config=genai.GenerationConfig(
+    response = client.models.generate_content(
+        model=REPAIR_MODEL,
+        contents=prompt,
+        config=genai_types.GenerateContentConfig(
             max_output_tokens=MAX_REPAIR_TOKENS,
             temperature=0.0,  # deterministic — we want JSON, not creativity
         ),
     )
-    response = model.generate_content(prompt)
     repaired_text: str = response.text.strip()
 
     # Strip accidental markdown fences the model may still emit
