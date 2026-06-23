@@ -12,9 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
-
 COPY requirements.txt .
-
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 
@@ -27,9 +25,7 @@ RUN groupadd --gid 1001 mcpuser \
 COPY --from=builder /install /usr/local
 
 WORKDIR /app
-
 COPY server.py .
-
 RUN chown -R mcpuser:mcpuser /app
 
 USER mcpuser
@@ -38,12 +34,14 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PORT=8080 \
     GEMINI_API_KEY="" \
-    MCP_API_KEYS=""
+    STRIPE_SECRET_KEY="" \
+    STRIPE_PRICE_ID="" \
+    SUPABASE_URL="" \
+    SUPABASE_SERVICE_KEY=""
 
 EXPOSE 8080
 
-# Healthcheck uses $PORT so it always matches what uvicorn binds to
-HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
-    CMD python -c "import urllib.request, os; urllib.request.urlopen('http://localhost:' + os.environ.get('PORT','8080') + '/health')" || exit 1
+# Let Railway handle health checks via its HTTP checker on /health
+# No HEALTHCHECK instruction — Railway will detect the port automatically
 
 ENTRYPOINT ["python", "server.py"]
