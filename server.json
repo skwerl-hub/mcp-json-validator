@@ -1,0 +1,14 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json",
+  "name": "io.github.skwerl-hub/mcp-json-validator",
+  "description": "Production-grade JSON repair and validation for agent pipelines. Auto-fixes malformed LLM output using Gemini, validates against JSON Schema Draft-07. Returns structured error codes for self-healing loops. $0.025 per successful call.",
+  "repository": {
+    "url": "https://github.com/skwerl-hub/mcp-json-validator",
+    "source": "github"
+  },
+  "version": "1.0.0",
+  "remotes": [{
+    "url": "https://mcp-json-validator-production.up.railway.app/sse",
+    "type": "sse"
+  }]
+}
