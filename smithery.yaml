@@ -1,0 +1,28 @@
+name: Self-Healing JSON Validator
+description: >
+  Production-grade JSON repair and validation for agent pipelines.
+  Auto-fixes malformed LLM output using Gemini, then validates against
+  your JSON Schema. Returns structured error codes for self-healing loops.
+  $0.025 per successful call — register at /register with your email.
+version: 1.0.0
+license: MIT
+keywords:
+  - json
+  - validation
+  - repair
+  - schema
+  - agents
+  - pipeline
+  - llm
+  - self-healing
+  - jsonschema
+  - data-integrity
+homepage: https://mcp-json-validator-production.up.railway.app
+repository: https://github.com/skwerl-hub/mcp-json-validator
+tools:
+  - name: sanitize_and_validate_json
+    description: >
+      Repairs malformed JSON and validates it against a JSON Schema Draft-07.
+      Pass raw_input (broken JSON string), target_schema (JSON Schema object),
+      and your api_key. Returns validated data or structured error codes with
+      remediation instructions for self-healing agent loops.
