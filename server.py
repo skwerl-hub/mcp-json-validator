@@ -512,12 +512,23 @@ async def handle_register(request: Request) -> JSONResponse:
     )
 
 
+async def handle_oauth_metadata(request: Request) -> JSONResponse:
+    """Stub OAuth metadata so Smithery does not 404 on discovery probes."""
+    return JSONResponse({
+        "resource": "https://mcp-json-validator-production.up.railway.app",
+        "bearer_methods_supported": ["header"],
+        "scopes_supported": [],
+    })
+
+
 app = Starlette(
     routes=[
         Route("/health", handle_health, methods=["GET"]),
         Route("/.well-known/mcp/server-card.json", handle_server_card, methods=["GET"]),
+        Route("/.well-known/oauth-protected-resource", handle_oauth_metadata, methods=["GET"]),
+        Route("/.well-known/oauth-protected-resource/sse", handle_oauth_metadata, methods=["GET"]),
         Route("/register", handle_register, methods=["POST"]),
-        Route("/sse", handle_sse, methods=["GET"]),
+        Route("/sse", handle_sse, methods=["GET", "POST"]),
         Mount("/messages/", app=sse_transport.handle_post_message),
     ]
 )
