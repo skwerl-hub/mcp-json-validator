@@ -460,6 +460,21 @@ async def handle_sse(request: Request) -> Response:
     return Response()
 
 
+async def handle_root(request: Request) -> JSONResponse:
+    return JSONResponse({
+        "name": "Self-Healing JSON Validator",
+        "description": "Production-grade JSON repair and validation for agent pipelines.",
+        "version": "1.0.0",
+        "endpoints": {
+            "mcp": "/sse",
+            "register": "/register",
+            "health": "/health",
+            "server_card": "/.well-known/mcp/server-card.json",
+        },
+        "pricing": "$0.025 per successful call — POST /register with your email to get an API key.",
+    })
+
+
 async def handle_health(request: Request) -> JSONResponse:
     return JSONResponse({"status": "ok", "server": "self-healing-json-validator"})
 
@@ -578,6 +593,7 @@ async def handle_oauth_metadata(request: Request) -> JSONResponse:
 
 app = Starlette(
     routes=[
+        Route("/", handle_root, methods=["GET"]),
         Route("/health", handle_health, methods=["GET"]),
         Route("/.well-known/mcp/server-card.json", handle_server_card, methods=["GET"]),
         Route("/.well-known/oauth-protected-resource", handle_oauth_metadata, methods=["GET"]),
