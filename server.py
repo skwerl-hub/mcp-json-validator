@@ -259,8 +259,8 @@ async def list_tools() -> list[Tool]:
                 "• On failure it returns a structured error_code + agent-readable "
                 "  remediation_instructions so you can self-correct in a loop without "
                 "  human intervention.\n\n"
-                "PRICING: $0.01 per call. Register at /register with your email to get "
-                "an API key. Billed monthly via Stripe.\n\n"
+                "PRICING: $0.025 per successful call. Register at /register with your "
+                "email to get an API key. Billed monthly via Stripe.\n\n"
                 "STATELESS & SERVERLESS: each call is fully independent — safe for "
                 "parallel execution and horizontal scaling."
             ),
@@ -270,22 +270,77 @@ async def list_tools() -> list[Tool]:
                     "raw_input": {
                         "type": "string",
                         "description": (
-                            "The raw string to validate. May be valid JSON, broken JSON, "
-                            "or JSON embedded in prose."
+                            "The raw string to validate and repair. May be valid JSON, "
+                            "broken JSON with syntax errors (trailing commas, unquoted keys, "
+                            "single quotes), truncated JSON, or JSON embedded in prose. "
+                            "The tool will attempt to extract and repair it automatically."
                         ),
                     },
                     "target_schema": {
                         "type": "object",
-                        "description": "A valid JSON Schema (Draft-07) object.",
+                        "description": (
+                            "A valid JSON Schema Draft-07 object describing the expected "
+                            "structure of the output. Used to guide LLM repair and validate "
+                            "the final result. Must include at minimum a \'type\' field. "
+                            "Example: {\"type\": \"object\", \"required\": [\"name\"], "
+                            "\"properties\": {\"name\": {\"type\": \"string\"}}}"
+                        ),
                     },
                     "api_key": {
                         "type": "string",
                         "description": (
-                            "Your API key from /register. Required for every call."
+                            "Your API key from POST /register. Starts with \'mcpjv_\'. "
+                            "Required on every call for authentication and billing. "
+                            "You are only charged on successful validation (status: valid)."
                         ),
                     },
                 },
                 "required": ["raw_input", "target_schema", "api_key"],
+            },
+            outputSchema={
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "enum": ["valid"],
+                        "description": "Always \'valid\' on success.",
+                    },
+                    "repair_applied": {
+                        "type": "boolean",
+                        "description": "True if syntax errors were automatically repaired by LLM.",
+                    },
+                    "validated_data": {
+                        "description": "The parsed, repaired, and schema-validated data. Use this downstream — never the original raw_input.",
+                    },
+                    "message": {
+                        "type": "string",
+                        "description": "Human-readable summary of what happened.",
+                    },
+                    "error_code": {
+                        "type": "string",
+                        "enum": [
+                            "FORBIDDEN", "EMPTY_INPUT", "INVALID_SCHEMA",
+                            "MALFORMED_SCHEMA", "REPAIR_PARSE_FAILURE",
+                            "REPAIR_UNAVAILABLE", "SCHEMA_VALIDATION_FAILURE",
+                        ],
+                        "description": "Present only on failure. Machine-readable code for agent control flow.",
+                    },
+                    "validation_errors": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Present only on SCHEMA_VALIDATION_FAILURE. Per-field violations to feed back to your generator LLM.",
+                    },
+                    "remediation_instructions": {
+                        "type": "string",
+                        "description": "Present only on failure. Step-by-step instructions for the agent to self-correct and retry.",
+                    },
+                },
+            },
+            annotations={
+                "readOnlyHint": True,
+                "destructiveHint": False,
+                "idempotentHint": True,
+                "openWorldHint": False,
             },
         )
     ]
